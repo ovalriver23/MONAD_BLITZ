@@ -1,6 +1,14 @@
 # Node modules
 /node_modules
 
+# Next.js build output
+/.next
+/out
+
+# Environment variables
+.env.local
+.env*.local
+
 # Compilation output
 /dist
 
