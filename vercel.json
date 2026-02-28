@@ -1,7 +1,4 @@
 {
-  "buildCommand": "cd monad-ticket && npm run build",
-  "outputDirectory": "monad-ticket/.next",
-  "installCommand": "cd monad-ticket && npm install",
-  "devCommand": "cd monad-ticket && npm run dev",
   "framework": "nextjs"
 }
+
