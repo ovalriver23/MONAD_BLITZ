@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
@@ -21,6 +21,7 @@ export default function TicketDetailPage() {
   const tokenId = Number(params.ticketId);
   const { tickets, loading } = useMyTickets();
   const { address } = useWallet();
+  const router = useRouter();
 
   const [qrValue, setQrValue] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(QR_REFRESH_INTERVAL);
@@ -85,8 +86,8 @@ export default function TicketDetailPage() {
     );
   }
 
-  const handleReturn = async (_tokenId: number) => {
-    console.log("Return ticket", _tokenId);
+  const handleReturned = () => {
+    router.push(ROUTES.myTickets);
   };
 
   return (
@@ -121,7 +122,7 @@ export default function TicketDetailPage() {
             <Link href={ROUTES.myTickets}>
               <Button variant="ghost" size="sm">← Back</Button>
             </Link>
-            <ReturnTicketModal ticket={ticket} onConfirm={handleReturn} />
+            <ReturnTicketModal ticket={ticket} onReturned={handleReturned} />
           </div>
         </div>
       </WalletGuard>

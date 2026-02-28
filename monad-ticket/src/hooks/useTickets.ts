@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { readContract } from "wagmi/actions";
 import { useWallet } from "../context/WalletContext";
-import { getMockTickets } from "../lib/mockTicketStore";
+import { getMockTickets, isTicketReturned } from "../lib/mockTicketStore";
 import { MOCK_EVENTS } from "../lib/mockEvents";
 import { CONTRACT_ADDRESS } from "../lib/constants";
 import { wagmiConfig } from "../lib/wagmiConfig";
@@ -95,7 +95,10 @@ export function useMyTickets() {
         ...mockTickets.filter((t) => !chainTokenIds.has(t.tokenId)),
       ];
 
-      const enriched = unique.map((t) => {
+      // Filter out returned tickets (on-chain tickets can't be burned, so we hide them)
+      const notReturned = unique.filter((t) => !isTicketReturned(t.tokenId));
+
+      const enriched = notReturned.map((t) => {
         const event = MOCK_EVENTS.find((e) => e.id === t.eventId);
         return event ? { ...t, event } : t;
       });
