@@ -1,16 +1,68 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { getReadContract, getWriteContract, getSigner } from "../lib/contract";
+import {
+  useWriteContract,
+  useSendTransaction,
+  useWaitForTransactionReceipt,
+} from "wagmi";
+import { readContract } from "wagmi/actions";
+import { parseEther } from "viem";
 import { useWallet } from "../context/WalletContext";
 import { MOCK_EVENTS } from "../lib/mockEvents";
 import { saveMockTicket } from "../lib/mockTicketStore";
-import { PLATFORM_ADDRESS } from "../lib/constants";
+import { CONTRACT_ADDRESS, PLATFORM_ADDRESS } from "../lib/constants";
+import { wagmiConfig } from "../lib/wagmiConfig";
 import type { Event } from "../types/event";
-import type { TxState } from "../types/contract";
 
 // ---------------------------------------------------------------------------
-// useEvents — fetch all events from the contract
+// ABI fragments (only what we need — keeps bundle small)
+// ---------------------------------------------------------------------------
+
+const TICKET_ABI = [
+  {
+    type: "function",
+    name: "eventCount",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "getEventInfo",
+    stateMutability: "view",
+    inputs: [{ name: "eventId", type: "uint256" }],
+    outputs: [
+      { name: "name", type: "string" },
+      { name: "maxTickets", type: "uint256" },
+      { name: "soldCount", type: "uint256" },
+      { name: "priceWei", type: "uint256" },
+    ],
+  },
+  {
+    type: "function",
+    name: "mintTicket",
+    stateMutability: "payable",
+    inputs: [{ name: "eventId", type: "uint256" }],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "createEvent",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "name", type: "string" },
+      { name: "maxTickets", type: "uint256" },
+      { name: "priceWei", type: "uint256" },
+    ],
+    outputs: [],
+  },
+] as const;
+
+const contractAddress = CONTRACT_ADDRESS as `0x${string}`;
+
+// ---------------------------------------------------------------------------
+// useEvents — fetch all events (wagmi readContract actions)
 // ---------------------------------------------------------------------------
 
 export function useEvents() {
@@ -22,21 +74,18 @@ export function useEvents() {
     setLoading(true);
     setError(null);
     try {
-      const contract = getReadContract();
-      if (!contract) {
-        setEvents(MOCK_EVENTS);
-        return;
-      }
-
       let count: bigint;
       try {
-        count = await contract.eventCount();
+        count = (await readContract(wagmiConfig, {
+          address: contractAddress,
+          abi: TICKET_ABI,
+          functionName: "eventCount",
+        })) as bigint;
       } catch {
         setEvents(MOCK_EVENTS);
         return;
       }
 
-      // No on-chain events — use mock data for demo
       if (Number(count) === 0) {
         setEvents(MOCK_EVENTS);
         return;
@@ -44,32 +93,41 @@ export function useEvents() {
 
       const chainEvents: Event[] = [];
       for (let i = 0; i < Number(count); i++) {
-        const [name, maxTickets, soldCount, priceWei] =
-          await contract.getEventInfo(i);
-        chainEvents.push({
-          id: i,
-          name,
-          description: "",
-          venue: "",
-          city: "",
-          date: "",
-          imageUrl: "",
-          maxTickets: Number(maxTickets),
-          soldCount: Number(soldCount),
-          priceWei: priceWei.toString(),
-          priceEth: "",
-          category: "concert",
-          artist: "",
-          exists: true,
-        });
+        try {
+          const result = (await readContract(wagmiConfig, {
+            address: contractAddress,
+            abi: TICKET_ABI,
+            functionName: "getEventInfo",
+            args: [BigInt(i)],
+          })) as [string, bigint, bigint, bigint];
+
+          const [name, maxTickets, soldCount, priceWei] = result;
+          chainEvents.push({
+            id: i,
+            name,
+            description: "",
+            venue: "",
+            city: "",
+            date: "",
+            imageUrl: "",
+            maxTickets: Number(maxTickets),
+            soldCount: Number(soldCount),
+            priceWei: priceWei.toString(),
+            priceEth: "",
+            category: "concert",
+            artist: "",
+            exists: true,
+          });
+        } catch {
+          // skip failed reads
+        }
       }
 
-      // Merge: on-chain data overlays mock events (keeps mock metadata like venue, date, etc.)
+      // Merge: on-chain data overlays mock events
       const chainMap = new Map(chainEvents.map((e) => [e.id, e]));
       const merged = MOCK_EVENTS.map((mock) => {
         const chain = chainMap.get(mock.id);
         if (!chain) return mock;
-        // Use mock metadata (venue, artist, date, etc.) but chain data for sold/price/name
         return {
           ...mock,
           name: chain.name || mock.name,
@@ -79,13 +137,11 @@ export function useEvents() {
           exists: true,
         };
       });
-      // Add any on-chain events with IDs beyond mock range
       chainEvents.forEach((e) => {
         if (!MOCK_EVENTS.some((m) => m.id === e.id)) merged.push(e);
       });
       setEvents(merged);
     } catch {
-      // Unexpected error — fall back to mock events so the UI still works
       setEvents(MOCK_EVENTS);
     } finally {
       setLoading(false);
@@ -113,29 +169,35 @@ export function useEvent(eventId: number) {
       setLoading(true);
       setError(null);
       try {
-        const contract = getReadContract();
-        if (!contract) {
-          setEvent(MOCK_EVENTS.find((e) => e.id === eventId) ?? null);
-          return;
-        }
         try {
-          const [name, maxTickets, soldCount, priceWei] =
-            await contract.getEventInfo(eventId);
+          const result = (await readContract(wagmiConfig, {
+            address: contractAddress,
+            abi: TICKET_ABI,
+            functionName: "getEventInfo",
+            args: [BigInt(eventId)],
+          })) as [string, bigint, bigint, bigint];
+
+          const [name, maxTickets, soldCount, priceWei] = result;
           if (name) {
+            // Merge with mock data for metadata (venue, date, etc.)
+            const mock = MOCK_EVENTS.find((e) => e.id === eventId);
             setEvent({
+              ...(mock ?? {
+                id: eventId,
+                description: "",
+                venue: "",
+                city: "",
+                date: "",
+                imageUrl: "",
+                priceEth: "",
+                category: "concert" as const,
+                artist: "",
+              }),
               id: eventId,
-              name,
-              description: "",
-              venue: "",
-              city: "",
-              date: "",
-              imageUrl: "",
+              name: name || mock?.name || "",
               maxTickets: Number(maxTickets),
               soldCount: Number(soldCount),
               priceWei: priceWei.toString(),
-              priceEth: "",
-              category: "concert",
-              artist: "",
               exists: true,
             });
             return;
@@ -157,43 +219,59 @@ export function useEvent(eventId: number) {
 }
 
 // ---------------------------------------------------------------------------
-// useMintTicket — purchase a ticket for an event
+// useMintTicket — purchase a ticket (wagmi writeContract + sendTransaction)
 // ---------------------------------------------------------------------------
 
+interface TxState {
+  status: "idle" | "pending" | "success" | "error";
+  hash?: string;
+  error?: string;
+}
+
 export function useMintTicket() {
-  const { ensureCorrectChain } = useWallet();
+  const { address, ensureCorrectChain } = useWallet();
   const [tx, setTx] = useState<TxState>({ status: "idle" });
+
+  const { writeContractAsync } = useWriteContract();
+  const { sendTransactionAsync } = useSendTransaction();
 
   const mint = useCallback(
     async (eventId: number, priceWei: string) => {
-      const isMockEvent = false;
+      const onCorrectChain = await ensureCorrectChain();
+      if (!onCorrectChain) return;
+
+      // Check if event exists on-chain
+      let isMockEvent = true;
+      try {
+        const result = (await readContract(wagmiConfig, {
+          address: contractAddress,
+          abi: TICKET_ABI,
+          functionName: "getEventInfo",
+          args: [BigInt(eventId)],
+        })) as [string, bigint, bigint, bigint];
+        if (result[0]) isMockEvent = false;
+      } catch {
+        // doesn't exist on-chain
+      }
+
+      setTx({ status: "pending" });
 
       if (isMockEvent) {
-        // Real MON transfer to the platform treasury — actual funds leave the wallet
-        const onCorrectChain = await ensureCorrectChain();
-        if (!onCorrectChain) return;
-
-        setTx({ status: "pending" });
+        // Mock event → send MON to platform address via wagmi
         try {
-          const signer = await getSigner();
-          if (!signer) throw new Error("Wallet not connected");
-
-          const tx = await signer.sendTransaction({
-            to: PLATFORM_ADDRESS,
+          const hash = await sendTransactionAsync({
+            to: PLATFORM_ADDRESS as `0x${string}`,
             value: BigInt(priceWei),
           });
-          await tx.wait();
-
           const tokenId = Date.now();
-          const address = await signer.getAddress();
           saveMockTicket({
             tokenId,
             eventId,
-            owner: address,
+            owner: address ?? "",
             purchasedAt: new Date().toISOString(),
             isUsed: false,
           });
-          setTx({ status: "success", hash: tx.hash });
+          setTx({ status: "success", hash });
         } catch (err: unknown) {
           setTx({
             status: "error",
@@ -203,19 +281,16 @@ export function useMintTicket() {
         return;
       }
 
-      const onCorrectChain = await ensureCorrectChain();
-      if (!onCorrectChain) return;
-
-      setTx({ status: "pending" });
+      // On-chain event → call mintTicket via wagmi
       try {
-        const contract = await getWriteContract();
-        if (!contract) throw new Error("Wallet not connected");
-
-        const receipt = await contract.mintTicket(eventId, {
+        const hash = await writeContractAsync({
+          address: contractAddress,
+          abi: TICKET_ABI,
+          functionName: "mintTicket",
+          args: [BigInt(eventId)],
           value: BigInt(priceWei),
         });
-        await receipt.wait();
-        setTx({ status: "success", hash: receipt.hash });
+        setTx({ status: "success", hash });
       } catch (err: unknown) {
         setTx({
           status: "error",
@@ -223,7 +298,7 @@ export function useMintTicket() {
         });
       }
     },
-    [ensureCorrectChain]
+    [address, ensureCorrectChain, writeContractAsync, sendTransactionAsync]
   );
 
   const reset = useCallback(() => setTx({ status: "idle" }), []);

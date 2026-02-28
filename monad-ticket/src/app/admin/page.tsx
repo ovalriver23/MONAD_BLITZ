@@ -1,13 +1,33 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useWriteContract } from "wagmi";
+import { parseEther } from "viem";
 import { PageHeader, PageWrapper } from "../../components/layout/PageWrapper";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
-import { getWriteContract } from "../../lib/contract";
-import { ethToWei } from "../../lib/utils";
 import { WalletGuard } from "../../components/wallet/WalletGuard";
-import type { TxState } from "../../types/contract";
+import { CONTRACT_ADDRESS } from "../../lib/constants";
+
+const TICKET_ABI = [
+  {
+    type: "function",
+    name: "createEvent",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "name", type: "string" },
+      { name: "maxTickets", type: "uint256" },
+      { name: "priceWei", type: "uint256" },
+    ],
+    outputs: [],
+  },
+] as const;
+
+interface TxState {
+  status: "idle" | "pending" | "success" | "error";
+  hash?: string;
+  error?: string;
+}
 
 export default function AdminPage() {
   // ── Auth state ──────────────────────────────────────────────────────────
@@ -23,6 +43,8 @@ export default function AdminPage() {
   const [maxTickets, setMaxTickets] = useState("");
   const [priceEth, setPriceEth] = useState("");
   const [tx, setTx] = useState<TxState>({ status: "idle" });
+
+  const { writeContractAsync } = useWriteContract();
 
   // ── Check auth on mount ─────────────────────────────────────────────────
   useEffect(() => {
@@ -73,19 +95,17 @@ export default function AdminPage() {
     setIsAuthenticated(false);
   };
 
-  // ── Create event handler ────────────────────────────────────────────────
+  // ── Create event handler (wagmi) ────────────────────────────────────────
   const handleCreate = async () => {
     setTx({ status: "pending" });
     try {
-      const contract = await getWriteContract();
-      if (!contract) throw new Error("Wallet not connected");
-      const receipt = await contract.createEvent(
-        name,
-        parseInt(maxTickets),
-        ethToWei(priceEth)
-      );
-      await receipt.wait();
-      setTx({ status: "success", hash: receipt.hash });
+      const hash = await writeContractAsync({
+        address: CONTRACT_ADDRESS as `0x${string}`,
+        abi: TICKET_ABI,
+        functionName: "createEvent",
+        args: [name, BigInt(maxTickets), parseEther(priceEth)],
+      });
+      setTx({ status: "success", hash });
       setName("");
       setMaxTickets("");
       setPriceEth("");
