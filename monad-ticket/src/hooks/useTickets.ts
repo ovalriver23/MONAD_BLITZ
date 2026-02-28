@@ -1,11 +1,45 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { getReadContract } from "../lib/contract";
+import { readContract } from "wagmi/actions";
 import { useWallet } from "../context/WalletContext";
-import { getMockTickets } from "../lib/mockTicketStore";
+import { getMockTickets, isTicketReturned } from "../lib/mockTicketStore";
 import { MOCK_EVENTS } from "../lib/mockEvents";
+import { CONTRACT_ADDRESS } from "../lib/constants";
+import { wagmiConfig } from "../lib/wagmiConfig";
 import type { Ticket } from "../types/ticket";
+
+const contractAddress = CONTRACT_ADDRESS as `0x${string}`;
+
+const TICKET_ABI = [
+  {
+    type: "function",
+    name: "eventCount",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "userTicketCount",
+    stateMutability: "view",
+    inputs: [
+      { name: "", type: "address" },
+      { name: "", type: "uint256" },
+    ],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "hasTicket",
+    stateMutability: "view",
+    inputs: [
+      { name: "user", type: "address" },
+      { name: "eventId", type: "uint256" },
+    ],
+    outputs: [{ type: "bool" }],
+  },
+] as const;
 
 // ---------------------------------------------------------------------------
 // useMyTickets — all tickets owned by the connected wallet
@@ -21,43 +55,50 @@ export function useMyTickets() {
     setLoading(true);
     setError(null);
     try {
-      // Always include locally-stored mock tickets
       const mockTickets = getMockTickets();
-
-      // Try to also pull real on-chain tickets if wallet is connected
       const chainTickets: Ticket[] = [];
+
       if (isConnected && address) {
         try {
-          const contract = getReadContract();
-          if (contract) {
-            const eventCount: bigint = await contract.eventCount();
-            for (let eventId = 0; eventId < Number(eventCount); eventId++) {
-              const count: bigint = await contract.userTicketCount(address, eventId);
-              for (let i = 0; i < Number(count); i++) {
-                chainTickets.push({
-                  tokenId: eventId * 1000 + i,
-                  eventId,
-                  owner: address,
-                  purchasedAt: new Date().toISOString(),
-                  isUsed: false,
-                });
-              }
+          const eventCount = (await readContract(wagmiConfig, {
+            address: contractAddress,
+            abi: TICKET_ABI,
+            functionName: "eventCount",
+          })) as bigint;
+
+          for (let eventId = 0; eventId < Number(eventCount); eventId++) {
+            const count = (await readContract(wagmiConfig, {
+              address: contractAddress,
+              abi: TICKET_ABI,
+              functionName: "userTicketCount",
+              args: [address as `0x${string}`, BigInt(eventId)],
+            })) as bigint;
+
+            for (let i = 0; i < Number(count); i++) {
+              chainTickets.push({
+                tokenId: eventId * 1000 + i,
+                eventId,
+                owner: address,
+                purchasedAt: new Date().toISOString(),
+                isUsed: false,
+              });
             }
           }
         } catch {
-          // contract unavailable — that's fine, mock tickets still show
+          // contract unavailable — mock tickets still show
         }
       }
 
-      // Merge: chain tickets first, then mock tickets (skip duplicates)
       const chainTokenIds = new Set(chainTickets.map((t) => t.tokenId));
       const unique = [
         ...chainTickets,
         ...mockTickets.filter((t) => !chainTokenIds.has(t.tokenId)),
       ];
 
-      // Enrich with event metadata from mock list
-      const enriched = unique.map((t) => {
+      // Filter out returned tickets (on-chain tickets can't be burned, so we hide them)
+      const notReturned = unique.filter((t) => !isTicketReturned(t.tokenId));
+
+      const enriched = notReturned.map((t) => {
         const event = MOCK_EVENTS.find((e) => e.id === t.eventId);
         return event ? { ...t, event } : t;
       });
@@ -90,9 +131,12 @@ export function useHasTicket(eventId: number) {
     if (!isConnected || !address) return;
     setLoading(true);
     try {
-      const contract = getReadContract();
-      if (!contract) return;
-      const result: boolean = await contract.hasTicket(address, eventId);
+      const result = (await readContract(wagmiConfig, {
+        address: contractAddress,
+        abi: TICKET_ABI,
+        functionName: "hasTicket",
+        args: [address as `0x${string}`, BigInt(eventId)],
+      })) as boolean;
       setHasTicket(result);
     } catch {
       setHasTicket(false);

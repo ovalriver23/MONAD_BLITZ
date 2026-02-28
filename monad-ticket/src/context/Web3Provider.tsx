@@ -1,67 +1,21 @@
 "use client";
 
 import { type ReactNode } from "react";
-import { WagmiProvider, http } from "wagmi";
+import { WagmiProvider } from "wagmi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-    RainbowKitProvider,
-    darkTheme,
-    getDefaultConfig,
-} from "@rainbow-me/rainbowkit";
-import { type Chain } from "viem";
+import { RainbowKitProvider, darkTheme } from "@rainbow-me/rainbowkit";
 import "@rainbow-me/rainbowkit/styles.css";
-
-// ---------------------------------------------------------------------------
-// Monad Testnet chain definition
-// ---------------------------------------------------------------------------
-
-const monadTestnet: Chain = {
-    id: 10143,
-    name: "Monad Testnet",
-    nativeCurrency: {
-        name: "MON",
-        symbol: "MON",
-        decimals: 18,
-    },
-    rpcUrls: {
-        default: { http: ["https://testnet-rpc.monad.xyz"] },
-    },
-    blockExplorers: {
-        default: {
-            name: "Monad Explorer",
-            url: "https://testnet-explorer.monad.xyz",
-        },
-    },
-    testnet: true,
-};
-
-// ---------------------------------------------------------------------------
-// wagmi config
-// ---------------------------------------------------------------------------
-
-const config = getDefaultConfig({
-    appName: "WhitePass",
-    projectId: "whitepass-monad-ticket", // WalletConnect project ID (placeholder)
-    chains: [monadTestnet],
-    transports: {
-        [monadTestnet.id]: http("https://testnet-rpc.monad.xyz"),
-    },
-    ssr: true,
-});
+import { wagmiConfig } from "../lib/wagmiConfig";
 
 const queryClient = new QueryClient();
 
-// ---------------------------------------------------------------------------
-// Provider
-// ---------------------------------------------------------------------------
-
 export function Web3Provider({ children }: { children: ReactNode }) {
     return (
-        <WagmiProvider config={config}>
+        <WagmiProvider config={wagmiConfig}>
             <QueryClientProvider client={queryClient}>
                 <RainbowKitProvider
                     theme={darkTheme({
-                        accentColor: "#7c3aed", // violet-600 to match existing design
+                        accentColor: "#7c3aed",
                         accentColorForeground: "white",
                         borderRadius: "large",
                     })}

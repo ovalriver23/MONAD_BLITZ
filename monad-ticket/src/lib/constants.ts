@@ -19,7 +19,8 @@ export const MONAD_CHAIN_CONFIG = {
 
 /** Deployed TicketFactory address — update after deploy */
 export const CONTRACT_ADDRESS =
-  process.env.NEXT_PUBLIC_CONTRACT_ADDRESS ?? "0x0000000000000000000000000000000000000000";
+  process.env.NEXT_PUBLIC_CONTRACT_ADDRESS ??
+  "0x9c3EB06F5e56baF84B9DD4c2490d9feF29905a17";
 
 /**
  * Platform treasury address — receives payment for mock/demo ticket purchases.

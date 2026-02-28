@@ -42,9 +42,27 @@ contract TicketFactory is ERC721, Ownable {
         evt.soldCount++;
     }
 
+    /// @notice Return a ticket and receive a refund at the original price
+    function burnTicket(uint256 tokenId) external {
+        require(ownerOf(tokenId) == msg.sender, "Not your ticket");
+        uint256 eventId = ticketToEvent[tokenId];
+        Event storage evt = events[eventId];
+
+        userTicketCount[msg.sender][eventId]--;
+        evt.soldCount--;
+
+        _burn(tokenId);
+
+        // Refund the original ticket price
+        if (evt.priceWei > 0 && address(this).balance >= evt.priceWei) {
+            payable(msg.sender).transfer(evt.priceWei);
+        }
+    }
+
+    /// @dev Soulbound: allow mint (from == 0) and burn (to == 0), block transfers
     function _update(address to, uint256 tokenId, address auth) internal override returns (address) {
         address from = _ownerOf(tokenId);
-        require(from == address(0), "Soulbound: transfer not allowed");
+        require(from == address(0) || to == address(0), "Soulbound: transfer not allowed");
         return super._update(to, tokenId, auth);
     }
 
@@ -56,4 +74,7 @@ contract TicketFactory is ERC721, Ownable {
         Event storage evt = events[eventId];
         return (evt.name, evt.maxTickets, evt.soldCount, evt.priceWei);
     }
+
+    /// @notice Allow the contract to receive MON for refunds
+    receive() external payable {}
 }
