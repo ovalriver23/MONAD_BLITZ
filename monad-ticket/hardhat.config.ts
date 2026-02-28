@@ -1,10 +1,17 @@
-import { HardhatUserConfig } from "hardhat/config";
-import "@nomicfoundation/hardhat-toolbox-mocha-ethers";
+import type { HardhatUserConfig } from "hardhat/config";
+import hardhatToolboxMochaEthersPlugin from "@nomicfoundation/hardhat-toolbox-mocha-ethers";
 import * as dotenv from "dotenv";
 dotenv.config({ path: ".env.local" });
 
 const config: HardhatUserConfig = {
-  solidity: "0.8.20",
+  plugins: [hardhatToolboxMochaEthersPlugin],
+  solidity: {
+    profiles: {
+      default: {
+        version: "0.8.28",
+      },
+    },
+  },
   networks: {
     monad: {
       type: "http",
