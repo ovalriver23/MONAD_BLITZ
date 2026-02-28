@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { Web3Provider } from "../context/Web3Provider";
 import { WalletProvider } from "../context/WalletContext";
 import { Navbar } from "../components/layout/Navbar";
 import { Footer } from "../components/layout/Footer";
@@ -31,12 +32,15 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} flex min-h-screen flex-col antialiased`}
       >
-        <WalletProvider>
-          <Navbar />
-          <div className="flex-1">{children}</div>
-          <Footer />
-        </WalletProvider>
+        <Web3Provider>
+          <WalletProvider>
+            <Navbar />
+            <div className="flex-1">{children}</div>
+            <Footer />
+          </WalletProvider>
+        </Web3Provider>
       </body>
     </html>
   );
 }
+

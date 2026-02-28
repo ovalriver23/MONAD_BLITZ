@@ -2,7 +2,7 @@
 
 import { type ReactNode } from "react";
 import { useWallet } from "../../context/WalletContext";
-import { Button } from "../ui/Button";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
 
 interface WalletGuardProps {
   children: ReactNode;
@@ -11,7 +11,7 @@ interface WalletGuardProps {
 
 /** Renders children only when wallet is connected; otherwise renders a connect prompt. */
 export function WalletGuard({ children, fallback }: WalletGuardProps) {
-  const { isConnected, isConnecting, connect } = useWallet();
+  const { isConnected } = useWallet();
 
   if (isConnected) return <>{children}</>;
 
@@ -21,10 +21,9 @@ export function WalletGuard({ children, fallback }: WalletGuardProps) {
         <p className="text-zinc-500 dark:text-zinc-400">
           Connect your wallet to continue.
         </p>
-        <Button loading={isConnecting} onClick={connect}>
-          Connect Wallet
-        </Button>
+        <ConnectButton />
       </div>
     )
   );
 }
+

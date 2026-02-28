@@ -15,7 +15,11 @@ export function QRScanner() {
     setScanning(true);
     scannerRef.current = new Html5QrcodeScanner(
       "qr-reader",
-      { fps: 10, qrbox: { width: 250, height: 250 } },
+      {
+        fps: 10,
+        qrbox: { width: 250, height: 250 },
+        videoConstraints: { facingMode: "environment" },
+      },
       false
     );
     scannerRef.current.render(
@@ -23,32 +27,46 @@ export function QRScanner() {
         scannerRef.current?.clear();
         setScanning(false);
         try {
+          // Parse the JSON payload from the QR code
+          const payload = JSON.parse(decodedText);
+          const { signature, timestamp, walletAddress, eventId } = payload;
+
+          if (!signature || !timestamp || !walletAddress || eventId === undefined) {
+            setResult({ valid: false, reason: "Geçersiz QR formatı" });
+            return;
+          }
+
           const res = await fetch("/api/verify-qr", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ payload: decodedText }),
+            body: JSON.stringify({ signature, timestamp, walletAddress, eventId }),
           });
           const data: TicketVerifyResult = await res.json();
           setResult(data);
         } catch {
-          setResult({ valid: false, error: "Verification request failed" });
+          setResult({ valid: false, reason: "QR kodu okunamadı veya doğrulama başarısız" });
         }
       },
-      (_err) => {} // ignore scan errors
+      (_err) => { } // ignore scan errors
     );
+  };
+
+  const reset = () => {
+    setResult(null);
+    setScanning(false);
   };
 
   useEffect(() => {
     return () => {
-      scannerRef.current?.clear().catch(() => {});
+      scannerRef.current?.clear().catch(() => { });
     };
   }, []);
 
   return (
     <div className="space-y-4">
-      {!scanning && (
+      {!scanning && !result && (
         <Button onClick={startScanner} fullWidth>
-          Start QR Scan
+          QR Taramayı Başlat
         </Button>
       )}
 
@@ -56,27 +74,37 @@ export function QRScanner() {
 
       {result && (
         <div
-          className={`rounded-xl p-4 text-sm font-medium ${
-            result.valid
-              ? "bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400"
-              : "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400"
-          }`}
+          className={`rounded-2xl p-8 text-center ${result.valid
+            ? "bg-green-100 dark:bg-green-900/30 border-2 border-green-500"
+            : "bg-red-100 dark:bg-red-900/30 border-2 border-red-500"
+            }`}
         >
           {result.valid ? (
-            <div className="space-y-1">
-              <p>✓ Valid ticket</p>
-              <p className="font-normal opacity-80">Token #{result.tokenId}</p>
-              <p className="font-normal opacity-80">Event #{result.eventId}</p>
+            <div>
+              <p className="text-5xl mb-3">✓</p>
+              <p className="text-2xl font-bold text-green-700 dark:text-green-400">
+                GEÇİŞ ONAYLANDI
+              </p>
             </div>
           ) : (
-            <p>✕ Invalid — {result.error}</p>
+            <div>
+              <p className="text-5xl mb-3">✗</p>
+              <p className="text-2xl font-bold text-red-700 dark:text-red-400">
+                GEÇERSİZ BİLET
+              </p>
+              {result.reason && (
+                <p className="mt-2 text-sm text-red-600 dark:text-red-300">
+                  {result.reason}
+                </p>
+              )}
+            </div>
           )}
         </div>
       )}
 
       {result && (
-        <Button variant="secondary" size="sm" fullWidth onClick={() => setResult(null)}>
-          Scan Another
+        <Button variant="secondary" fullWidth onClick={reset}>
+          Tekrar Tara
         </Button>
       )}
     </div>
