@@ -36,17 +36,17 @@ export function useEvents() {
         return;
       }
 
-      // No on-chain events yet — use mock data for demo
+      // No on-chain events — use mock data for demo
       if (Number(count) === 0) {
         setEvents(MOCK_EVENTS);
         return;
       }
 
-      const results: Event[] = [];
+      const chainEvents: Event[] = [];
       for (let i = 0; i < Number(count); i++) {
         const [name, maxTickets, soldCount, priceWei] =
           await contract.getEventInfo(i);
-        results.push({
+        chainEvents.push({
           id: i,
           name,
           description: "",
@@ -63,7 +63,27 @@ export function useEvents() {
           exists: true,
         });
       }
-      setEvents(results);
+
+      // Merge: on-chain data overlays mock events (keeps mock metadata like venue, date, etc.)
+      const chainMap = new Map(chainEvents.map((e) => [e.id, e]));
+      const merged = MOCK_EVENTS.map((mock) => {
+        const chain = chainMap.get(mock.id);
+        if (!chain) return mock;
+        // Use mock metadata (venue, artist, date, etc.) but chain data for sold/price/name
+        return {
+          ...mock,
+          name: chain.name || mock.name,
+          maxTickets: chain.maxTickets,
+          soldCount: chain.soldCount,
+          priceWei: chain.priceWei,
+          exists: true,
+        };
+      });
+      // Add any on-chain events with IDs beyond mock range
+      chainEvents.forEach((e) => {
+        if (!MOCK_EVENTS.some((m) => m.id === e.id)) merged.push(e);
+      });
+      setEvents(merged);
     } catch {
       // Unexpected error — fall back to mock events so the UI still works
       setEvents(MOCK_EVENTS);
@@ -146,7 +166,7 @@ export function useMintTicket() {
 
   const mint = useCallback(
     async (eventId: number, priceWei: string) => {
-      const isMockEvent = MOCK_EVENTS.some((e) => e.id === eventId);
+      const isMockEvent = false;
 
       if (isMockEvent) {
         // Real MON transfer to the platform treasury — actual funds leave the wallet

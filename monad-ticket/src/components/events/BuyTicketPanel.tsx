@@ -12,13 +12,15 @@ import type { Event } from "../../types/event";
 
 export function BuyTicketPanel({ event }: { event: Event }) {
   const soldOut = isSoldOut(event.soldCount, event.maxTickets);
-  const { hasTicket } = useHasTicket(event.id);
+  const { hasTicket, recheck } = useHasTicket(event.id);
   const { mint, tx, reset } = useMintTicket();
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   const handleBuy = async () => {
     await mint(event.id, event.priceWei);
     setConfirmOpen(false);
+    // Re-check on-chain ownership so the button updates immediately
+    recheck();
   };
 
   return (

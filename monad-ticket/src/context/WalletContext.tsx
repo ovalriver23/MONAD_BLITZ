@@ -2,17 +2,14 @@
 
 import {
   createContext,
-  useCallback,
   useContext,
-  useEffect,
-  useState,
   type ReactNode,
 } from "react";
-import { getBrowserProvider, isCorrectChain, switchToMonad } from "../lib/contract";
+import { useAccount, useChainId, useSwitchChain } from "wagmi";
 import type { WalletState } from "../types/contract";
 
 // ---------------------------------------------------------------------------
-// Context shape
+// Context shape — same API as before so all components keep working
 // ---------------------------------------------------------------------------
 
 interface WalletContextValue extends WalletState {
@@ -23,118 +20,44 @@ interface WalletContextValue extends WalletState {
 
 const WalletContext = createContext<WalletContextValue | null>(null);
 
+const MONAD_CHAIN_ID = 10143;
+
 // ---------------------------------------------------------------------------
-// Provider
+// Provider — thin wrapper around wagmi hooks
 // ---------------------------------------------------------------------------
 
 export function WalletProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<WalletState>({
-    address: null,
-    chainId: null,
-    isConnected: false,
-    isConnecting: false,
+  const { address, isConnected, isConnecting } = useAccount();
+  const chainId = useChainId();
+  const { switchChain } = useSwitchChain();
+
+  const state: WalletState = {
+    address: address ?? null,
+    chainId: chainId ?? null,
+    isConnected,
+    isConnecting,
     error: null,
-  });
+  };
 
-  // ── auto-reconnect on mount ──────────────────────────────────────────────
-  useEffect(() => {
-    const tryAutoConnect = async () => {
-      const provider = getBrowserProvider();
-      if (!provider) return;
-      try {
-        const accounts: string[] = await provider.send("eth_accounts", []);
-        if (accounts.length > 0) {
-          const network = await provider.getNetwork();
-          setState((s) => ({
-            ...s,
-            address: accounts[0],
-            chainId: Number(network.chainId),
-            isConnected: true,
-          }));
-        }
-      } catch {}
-    };
-    tryAutoConnect();
-  }, []);
+  // RainbowKit handles connect/disconnect via its modal,
+  // but we keep the API for WalletGuard backward compatibility
+  const connect = async () => {
+    // No-op: RainbowKit's ConnectButton handles connection
+  };
 
-  // ── wallet event listeners ───────────────────────────────────────────────
-  useEffect(() => {
-    if (typeof window === "undefined" || !window.ethereum) return;
+  const disconnect = () => {
+    // No-op: RainbowKit's ConnectButton handles disconnection
+  };
 
-    const onAccountsChanged = (accounts: string[]) => {
-      if (accounts.length === 0) {
-        setState({
-          address: null,
-          chainId: null,
-          isConnected: false,
-          isConnecting: false,
-          error: null,
-        });
-      } else {
-        setState((s) => ({ ...s, address: accounts[0], isConnected: true }));
-      }
-    };
-
-    const onChainChanged = (chainId: string) => {
-      setState((s) => ({ ...s, chainId: parseInt(chainId, 16) }));
-    };
-
-    window.ethereum.on("accountsChanged", onAccountsChanged);
-    window.ethereum.on("chainChanged", onChainChanged);
-    return () => {
-      window.ethereum?.removeListener("accountsChanged", onAccountsChanged);
-      window.ethereum?.removeListener("chainChanged", onChainChanged);
-    };
-  }, []);
-
-  // ── actions ──────────────────────────────────────────────────────────────
-  const connect = useCallback(async () => {
-    const provider = getBrowserProvider();
-    if (!provider) {
-      setState((s) => ({ ...s, error: "No Web3 wallet detected. Install MetaMask." }));
-      return;
-    }
-    setState((s) => ({ ...s, isConnecting: true, error: null }));
+  const ensureCorrectChain = async (): Promise<boolean> => {
+    if (chainId === MONAD_CHAIN_ID) return true;
     try {
-      const accounts: string[] = await provider.send("eth_requestAccounts", []);
-      const network = await provider.getNetwork();
-      setState({
-        address: accounts[0],
-        chainId: Number(network.chainId),
-        isConnected: true,
-        isConnecting: false,
-        error: null,
-      });
-    } catch (err: unknown) {
-      setState((s) => ({
-        ...s,
-        isConnecting: false,
-        error: err instanceof Error ? err.message : "Connection rejected",
-      }));
-    }
-  }, []);
-
-  const disconnect = useCallback(() => {
-    setState({
-      address: null,
-      chainId: null,
-      isConnected: false,
-      isConnecting: false,
-      error: null,
-    });
-  }, []);
-
-  const ensureCorrectChain = useCallback(async (): Promise<boolean> => {
-    const ok = await isCorrectChain();
-    if (ok) return true;
-    try {
-      await switchToMonad();
+      switchChain({ chainId: MONAD_CHAIN_ID });
       return true;
     } catch {
-      setState((s) => ({ ...s, error: "Please switch to Monad Testnet." }));
       return false;
     }
-  }, []);
+  };
 
   return (
     <WalletContext.Provider value={{ ...state, connect, disconnect, ensureCorrectChain }}>

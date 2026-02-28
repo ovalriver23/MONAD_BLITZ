@@ -32,7 +32,12 @@ export async function POST(req: NextRequest) {
         const wallet = new ethers.Wallet(privateKey);
         const signature = await wallet.signMessage(message);
 
-        return NextResponse.json({ signature, timestamp });
+        return NextResponse.json({
+            signature,
+            timestamp,
+            walletAddress: walletAddress.toLowerCase(),
+            eventId: Number(eventId),
+        });
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "Internal server error";
         return NextResponse.json({ error: message }, { status: 500 });

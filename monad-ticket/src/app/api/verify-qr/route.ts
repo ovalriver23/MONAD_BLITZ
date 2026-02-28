@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
         if (age > QR_EXPIRY_MS) {
             return NextResponse.json({
                 valid: false,
-                reason: "QR code expired (older than 10 seconds)",
+                reason: "QR expired",
             });
         }
         if (age < 0) {

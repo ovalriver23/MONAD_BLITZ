@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 
 /** Monad Testnet chain ID */
-export const MONAD_CHAIN_ID = 41454;
+export const MONAD_CHAIN_ID = 10143;
 
 export const MONAD_CHAIN_CONFIG = {
   chainId: `0x${MONAD_CHAIN_ID.toString(16)}`,
@@ -27,6 +27,9 @@ export const CONTRACT_ADDRESS =
  */
 export const PLATFORM_ADDRESS =
   process.env.NEXT_PUBLIC_PLATFORM_ADDRESS ?? CONTRACT_ADDRESS;
+
+/** Contract owner wallet address — only this wallet can access /admin */
+export const OWNER_ADDRESS = "0x36d1921b5856F87F8C76c720898a7322C43079f5";
 
 /** Maximum tickets one wallet can hold per event */
 export const MAX_TICKETS_PER_USER = 2;

@@ -20,10 +20,7 @@ export interface TicketQRPayload {
 
 export interface TicketVerifyResult {
   valid: boolean;
-  tokenId?: number;
-  eventId?: number;
-  owner?: string;
-  error?: string;
+  reason?: string;
 }
 
 export interface ReturnTicketRequest {

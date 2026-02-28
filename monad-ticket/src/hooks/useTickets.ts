@@ -86,23 +86,24 @@ export function useHasTicket(eventId: number) {
   const [hasTicket, setHasTicket] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
+  const check = useCallback(async () => {
     if (!isConnected || !address) return;
-    const check = async () => {
-      setLoading(true);
-      try {
-        const contract = getReadContract();
-        if (!contract) return;
-        const result: boolean = await contract.hasTicket(address, eventId);
-        setHasTicket(result);
-      } catch {
-        setHasTicket(false);
-      } finally {
-        setLoading(false);
-      }
-    };
-    check();
+    setLoading(true);
+    try {
+      const contract = getReadContract();
+      if (!contract) return;
+      const result: boolean = await contract.hasTicket(address, eventId);
+      setHasTicket(result);
+    } catch {
+      setHasTicket(false);
+    } finally {
+      setLoading(false);
+    }
   }, [address, isConnected, eventId]);
 
-  return { hasTicket, loading };
+  useEffect(() => {
+    check();
+  }, [check]);
+
+  return { hasTicket, loading, recheck: check };
 }
